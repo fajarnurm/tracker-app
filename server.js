@@ -1,16 +1,23 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const app = express();
-const PORT = 3000;
 
-// Buat DB in-memory
-const db = new sqlite3.Database(':memory:');
+const app = express();
+const PORT = process.env.PORT || 3000;
+const uploadDir = path.join(__dirname, process.env.UPLOAD_DIR || 'uploads');
+const dbPath = process.env.DB_FILE || './data.db';
+
+// Buat folder upload jika belum ada
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+// Setup database SQLite persistent
+const db = new sqlite3.Database(dbPath);
 db.serialize(() => {
-  db.run(`CREATE TABLE locations (
+  db.run(`CREATE TABLE IF NOT EXISTS locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     latitude REAL,
     longitude REAL,
@@ -19,13 +26,9 @@ db.serialize(() => {
   )`);
 });
 
-// Setup folder upload
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-// Setup upload multer
+// Setup multer untuk upload gambar
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
 });
 const upload = multer({ storage });
@@ -33,10 +36,10 @@ const upload = multer({ storage });
 // Middleware
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(uploadDir));
 app.use(express.static('public'));
 
-// Endpoint POST lokasi + gambar
+// Endpoint kirim lokasi + gambar
 app.post('/api/location', upload.single('image'), (req, res) => {
   const { latitude, longitude } = req.body;
   const image = req.file ? req.file.filename : null;
@@ -64,4 +67,7 @@ app.get('/dashboard', (req, res) => {
   });
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+// Jalankan server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
